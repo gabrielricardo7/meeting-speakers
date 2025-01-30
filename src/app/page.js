@@ -1,101 +1,344 @@
-import Image from "next/image";
+"use client";
+import React, { useState, useEffect } from "react";
+import * as Yup from "yup";
+import dayjs from "dayjs";
+import xlsx from "json-as-xlsx";
+import { saveAs } from "file-saver";
+import { Formik, Form, Field, FieldArray } from "formik";
+import {
+  FiCopy,
+  FiDownload,
+  FiList,
+  FiMinus,
+  FiPlus,
+  FiSearch,
+  FiTable,
+  FiUpload,
+  FiX,
+} from "react-icons/fi";
+
+const initialValues = {
+  date: "",
+  speakers: [{ name: "" }],
+};
+
+const SpeakerSchema = Yup.object().shape({
+  date: Yup.date().required("Data é obrigatória"),
+  speakers: Yup.array()
+    .of(
+      Yup.object().shape({
+        name: Yup.string().required("Nome é obrigatório"),
+      })
+    )
+    .min(1)
+    .max(3),
+});
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const filename = `oradores_${dayjs().format("YYYY-MM-DD").toString()}`;
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const [data, setData] = useState(initialValues);
+  const [history, setHistory] = useState([]);
+  const [filter, setFilter] = useState([]);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    const storage = localStorage.getItem("meeting-speakers");
+    if (storage) {
+      const savedHistory = JSON.parse(storage);
+      setHistory(savedHistory);
+      setFilter(savedHistory);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("meeting-speakers", JSON.stringify(history));
+    setFilter(history);
+  }, [history]);
+
+  const computeSundays = (date) => {
+    const today = dayjs();
+    const difference = today.diff(dayjs(date), "week");
+    return difference;
+  };
+
+  const handleSubmit = async (values, { resetForm }) => {
+    const newNames = values.speakers
+      .filter((x) => x.name)
+      .map((x) => ({
+        name: x.name,
+        date: values.date,
+      }));
+    setHistory((prevHistory) => {
+      const updated = prevHistory.map((item) => {
+        const updatedSpeaker = newNames.find((x) => x.name === item.name);
+        return updatedSpeaker ? updatedSpeaker : item;
+      });
+      const newSpeakers = newNames.filter(
+        (x) => !prevHistory.some((item) => item.name === x.name)
+      );
+      return [...updated, ...newSpeakers];
+    });
+    onSearch(" ");
+    resetForm();
+  };
+
+  const handleSave = () => {
+    const blob = new Blob([JSON.stringify(history)], {
+      type: "application/json",
+    });
+    saveAs(blob, `${filename}.json`);
+  };
+
+  const handleLoad = (e) => {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    const fileChosen = document.getElementById("chosen");
+    reader.onload = (e) => {
+      const result = JSON.parse(e.target.result);
+      setHistory(result);
+      localStorage.setItem("meeting-speakers", JSON.stringify(result));
+    };
+    reader.readAsText(file);
+    fileChosen.textContent = file.name;
+  };
+
+  const handleExport = () => {
+    const data = [
+      {
+        sheet: "Oradores",
+        columns: [
+          { label: "Nome", value: "name" },
+          { label: "Data", value: "date" },
+        ],
+        content: history,
+      },
+    ];
+    const settings = {
+      fileName: `${filename}`,
+      extraLength: 3,
+    };
+    xlsx(data, settings);
+  };
+
+  const removeAccents = (str) => {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
+
+  const onSearch = (query) => {
+    const search = removeAccents(query.toLowerCase()).split(" ");
+    const filtered = history.filter((speaker) => {
+      const name = removeAccents(speaker.name.toLowerCase());
+      return search.every((part) => name.includes(part));
+    });
+    setFilter(filtered);
+  };
+
+  const handleSearch = (e) => {
+    setQuery(e.target.value);
+    onSearch(e.target.value);
+  };
+
+  const toggleSearch = (e) => {
+    if (query.length !== 0) {
+      setQuery("");
+      setFilter(history);
+    }
+    e.target.closest("div").querySelector("input").focus();
+  };
+
+  const copyText = (e) => {
+    const btn = e.target;
+    const b = btn.closest("div").querySelector("b");
+    const textToCopy = b.textContent;
+    navigator.clipboard.writeText(textToCopy);
+  };
+
+  const delSpeaker = (index) => {
+    if (confirm("Excluir?")) {
+      const list = history.filter((speaker) => {
+        return speaker.name !== history[index].name;
+      });
+      setHistory(list);
+    }
+  };
+
+  return (
+    <Formik
+      initialValues={data}
+      validationSchema={SpeakerSchema}
+      onSubmit={handleSubmit}
+    >
+      {({ values, errors }) => (
+        <Form className="w-screen max-w-5xl mx-auto space-y-2">
+          <h1 className="mt-4 text-center text-lg font-bold">
+            Oradores da Reunião
+          </h1>
+          <div className="w-full flex flex-col md:flex-row items-center">
+            <div className="w-full basis-128 flex justify-end items-center my-2">
+              <input id="loader" type="file" onChange={handleLoad} hidden />
+              <span id="chosen">Nenhum arquivo escolhido</span>
+              <button
+                type="button"
+                title="Carregar JSON"
+                onClick={() => document.getElementById("loader").click()}
+                className="mx-2 bg-teal-500 text-white p-3 rounded-md"
+              >
+                <FiUpload />
+              </button>
+              <button
+                type="button"
+                title="Baixar JSON"
+                onClick={handleSave}
+                className="mx-2 bg-sky-500 text-white p-3 rounded-md"
+              >
+                <FiDownload />
+              </button>
+            </div>
+            <div className="w-full basis-128 flex justify-end items-center">
+              <button
+                type="button"
+                title="Exportar XLSX"
+                onClick={handleExport}
+                className="mx-2 bg-emerald-500 text-white p-3 rounded-md"
+              >
+                <FiTable />
+              </button>
+              <Field name="date">
+                {({ field }) => (
+                  <input
+                    {...field}
+                    type="date"
+                    id="date-input"
+                    className={`mx-2 text-black px-2 py-1 border-4 rounded-md focus:border-yellow-500 ${
+                      errors.date ? "border-red-500" : ""
+                    }`}
+                  />
+                )}
+              </Field>
+              <button
+                type="submit"
+                title="Cadastrar oradores"
+                className="mx-2 bg-fuchsia-500 text-white p-3 rounded-md"
+              >
+                <FiList />
+              </button>
+            </div>
+          </div>
+          <FieldArray name="speakers">
+            {({ push, remove }) => (
+              <>
+                {values.speakers.map((speaker, index) => (
+                  <div key={index} className="flex items-center text-black">
+                    <Field name={`speakers[${index}].name`}>
+                      {({ field }) => (
+                        <input
+                          {...field}
+                          type="text"
+                          placeholder={`${index + 1}º Orador`}
+                          id={`name${index + 1}`}
+                          className={`mx-2 w-full p-1 border-4 rounded-md focus:border-yellow-500 ${
+                            errors.speakers ? "border-red-500" : ""
+                          }`}
+                        />
+                      )}
+                    </Field>
+                    {values.speakers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => remove(index)}
+                        className="mx-2 bg-yellow-500 text-white p-3 rounded-md"
+                      >
+                        <FiMinus />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {values.speakers.length < 3 && (
+                  <div className="w-full mx-auto text-right">
+                    <button
+                      type="button"
+                      onClick={() => push({ name: "" })}
+                      className="mx-2 bg-green-500 text-white p-3 rounded-md"
+                    >
+                      <FiPlus />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </FieldArray>
+          <div className="mb-4 flex items-center text-white">
+            <input
+              type="text"
+              value={query}
+              onChange={handleSearch}
+              placeholder="Pesquisar oradores..."
+              name="search"
+              className="mx-2 w-full p-1 text-black border-4 rounded-md focus:border-blue-500"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+            <button
+              type="button"
+              onClick={toggleSearch}
+              className={`mx-2 p-3 rounded-md ${
+                query.length === 0 ? "bg-blue-500" : "bg-rose-500"
+              }`}
+            >
+              {query.length !== 0 ? <FiX /> : <FiSearch />}
+            </button>
+          </div>
+          <div className="mx-2 text-left text-white dark:text-black">
+            {filter.length === 0 ? (
+              <div className="mx-2 text-center text-black dark:text-white">
+                <span>Vazio</span>
+              </div>
+            ) : (
+              <ul className="mb-8">
+                {filter
+                  .sort((a, b) => dayjs(a.data).unix() - dayjs(b.data).unix())
+                  .map((speaker, index) => (
+                    <li
+                      key={index}
+                      className={
+                        index % 2 === 0
+                          ? "bg-slate-500 dark:bg-[#e3edf0]"
+                          : "bg-stone-500 dark:bg-white"
+                      }
+                    >
+                      <div className="py-2 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={copyText}
+                          className="mx-2 p-0.5 bg-[#003b6f] text-white rounded-md"
+                        >
+                          <FiCopy />
+                        </button>
+                        <div className="basis-[50%] flex items-center break-words">
+                          <b>{speaker.name}</b>
+                        </div>
+                        <div className="basis-[42%] flex flex-col md:flex-row justify-around items-center">
+                          <span>
+                            {dayjs(speaker.date).format("DD/MM/YYYY")}
+                          </span>
+                          <span className="border-2 rounded-full border-blue-500 w-fit px-2 font-bold">
+                            {computeSundays(speaker.date)}&nbsp;domingos
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => delSpeaker(index)}
+                          className="mx-2 bg-red-500 text-white rounded-full"
+                        >
+                          <FiX />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+        </Form>
+      )}
+    </Formik>
   );
 }
