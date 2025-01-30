@@ -7,8 +7,8 @@ import { saveAs } from "file-saver";
 import { Formik, Form, Field, FieldArray } from "formik";
 import {
   FiCopy,
+  FiCornerDownLeft,
   FiDownload,
-  FiList,
   FiMinus,
   FiPlus,
   FiSearch,
@@ -151,7 +151,7 @@ export default function Home() {
     const btn = e.target;
     const b = btn.closest("div").querySelector("b");
     const textToCopy = b.textContent;
-    navigator.clipboard.writeText(textToCopy);
+    navigator.clipboard.writeText(textToCopy).then(alert("Nome copiado."));
   };
 
   const delSpeaker = (index) => {
@@ -196,33 +196,30 @@ export default function Home() {
               </button>
             </div>
             <div className="w-full basis-128 flex justify-end items-center">
+              <label htmlFor="export-button">Planilha:</label>
               <button
                 type="button"
+                id="export-button"
                 title="Exportar XLSX"
                 onClick={handleExport}
                 className="mx-2 bg-emerald-500 text-white p-3 rounded-md"
               >
                 <FiTable />
               </button>
+              <label htmlFor="date-input">Data:</label>
               <Field name="date">
                 {({ field }) => (
                   <input
                     {...field}
                     type="date"
                     id="date-input"
-                    className={`mx-2 text-black px-2 py-1 border-4 rounded-md focus:border-yellow-500 ${
+                    placeholder="Data"
+                    className={`mx-2 text-black py-1 border-4 rounded-md focus:border-yellow-500 ${
                       errors.date ? "border-red-500" : ""
                     }`}
                   />
                 )}
               </Field>
-              <button
-                type="submit"
-                title="Cadastrar oradores"
-                className="mx-2 bg-fuchsia-500 text-white p-3 rounded-md"
-              >
-                <FiList />
-              </button>
             </div>
           </div>
           <FieldArray name="speakers">
@@ -246,6 +243,7 @@ export default function Home() {
                     {values.speakers.length > 1 && (
                       <button
                         type="button"
+                        title="Remover entrada"
                         onClick={() => remove(index)}
                         className="mx-2 bg-yellow-500 text-white p-3 rounded-md"
                       >
@@ -258,6 +256,7 @@ export default function Home() {
                   <div className="w-full mx-auto text-right">
                     <button
                       type="button"
+                      title="Adicionar entrada"
                       onClick={() => push({ name: "" })}
                       className="mx-2 bg-green-500 text-white p-3 rounded-md"
                     >
@@ -265,6 +264,17 @@ export default function Home() {
                     </button>
                   </div>
                 )}
+                <div className="w-full mx-auto text-right">
+                  <label htmlFor="submit-button">Registrar oradores:</label>
+                  <button
+                    type="submit"
+                    id="submit-button"
+                    title="Registrar oradores"
+                    className="mx-2 bg-gray-500 text-white p-3 rounded-md"
+                  >
+                    <FiCornerDownLeft />
+                  </button>
+                </div>
               </>
             )}
           </FieldArray>
@@ -279,6 +289,7 @@ export default function Home() {
             />
             <button
               type="button"
+              title="Pesquisar / Filtrar"
               onClick={toggleSearch}
               className={`mx-2 p-3 rounded-md ${
                 query.length === 0 ? "bg-blue-500" : "bg-rose-500"
@@ -295,7 +306,7 @@ export default function Home() {
             ) : (
               <ul className="mb-8">
                 {filter
-                  .sort((a, b) => dayjs(a.data).unix() - dayjs(b.data).unix())
+                  .sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix())
                   .map((speaker, index) => (
                     <li
                       key={index}
