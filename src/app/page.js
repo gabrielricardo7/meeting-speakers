@@ -48,10 +48,12 @@ export default function Home() {
   const [data, setData] = useState(initialValues);
   const [history, setHistory] = useState([]);
   const [filter, setFilter] = useState([]);
+  const [backup, setBackup] = useState([]);
+  const [chosen, setChosen] = useState("");
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    const storage = localStorage.getItem("meeting-speakers");
+    const storage = localStorage.getItem("oradores");
     if (storage) {
       const savedHistory = JSON.parse(storage);
       setHistory(savedHistory);
@@ -60,14 +62,64 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("meeting-speakers", JSON.stringify(history));
+    localStorage.setItem("oradores", JSON.stringify(history));
     setFilter(history);
+    setQuery("");
   }, [history]);
 
-  const computeSundays = (date) => {
-    const today = dayjs();
-    const difference = today.diff(dayjs(date), "week");
-    return difference;
+  const equalArrays = (arr1, arr2) => {
+    if (arr1.length !== arr2.length) return false;
+    const arr1Str = arr1.map((obj) => JSON.stringify(obj)).sort();
+    const arr2Str = arr2.map((obj) => JSON.stringify(obj)).sort();
+    return JSON.stringify(arr1Str) === JSON.stringify(arr2Str);
+  };
+
+  useEffect(() => {
+    if (backup.length !== 0) {
+      const fileChosen = document.getElementById("chosen");
+      if (equalArrays(backup, history)) {
+        toast("Registros iguais aos do arquivo.");
+        fileChosen.textContent = chosen;
+      } else {
+        if (confirm(`Carregar registros do arquivo: "${chosen}"?`)) {
+          const updatedHistory = [...history];
+          let updatedItems = 0;
+          let addedItems = 0;
+          backup.forEach((newItem) => {
+            const index = updatedHistory.findIndex(
+              (item) => item.name === newItem.name
+            );
+            if (index !== -1) {
+              if (
+                new Date(newItem.date) > new Date(updatedHistory[index].date)
+              ) {
+                updatedHistory[index] = newItem;
+                updatedItems++;
+              }
+            } else {
+              updatedHistory.push(newItem);
+              addedItems++;
+            }
+          });
+          toast(
+            `Registros: atualizou ${updatedItems} e adicionou ${addedItems} do arquivo carregado.`
+          );
+          setHistory(updatedHistory);
+          fileChosen.textContent = chosen;
+        }
+      }
+    }
+  }, [backup]);
+
+  const handleLoad = (e) => {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = JSON.parse(e.target.result);
+      setBackup(result);
+    };
+    reader.readAsText(file);
+    setChosen(file.name);
   };
 
   const handleSubmit = async (values, { resetForm, setSubmitting }) => {
@@ -110,19 +162,6 @@ export default function Home() {
       type: "application/json",
     });
     saveAs(blob, `${filename}.json`);
-  };
-
-  const handleLoad = (e) => {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-    const fileChosen = document.getElementById("chosen");
-    reader.onload = (e) => {
-      const result = JSON.parse(e.target.result);
-      setHistory(result);
-      localStorage.setItem("meeting-speakers", JSON.stringify(result));
-    };
-    reader.readAsText(file);
-    fileChosen.textContent = file.name;
   };
 
   const handleExport = () => {
@@ -169,6 +208,12 @@ export default function Home() {
     e.target.closest("div").querySelector("input").focus();
   };
 
+  const computeSundays = (date) => {
+    const today = dayjs();
+    const difference = today.diff(dayjs(date), "week");
+    return difference;
+  };
+
   const copyText = (e) => {
     const btn = e.target;
     const b = btn.closest("div").querySelector("b");
@@ -189,7 +234,7 @@ export default function Home() {
         }
         return a !== b;
       });
-      toast(`Excluído da lista: ${nameToDel}.`);
+      toast.update(`Excluído da lista: ${nameToDel}.`);
       setHistory(list);
     }
   };
