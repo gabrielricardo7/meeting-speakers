@@ -52,6 +52,14 @@ export default function Home() {
   const [chosen, setChosen] = useState("");
   const [query, setQuery] = useState("");
 
+  const capitalize = (name) => {
+    return name
+      .toLowerCase()
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
   useEffect(() => {
     const storage = localStorage.getItem("oradores");
     if (storage) {
@@ -87,7 +95,7 @@ export default function Home() {
           let addedItems = 0;
           backup.forEach((newItem) => {
             const index = updatedHistory.findIndex(
-              (item) => item.name === newItem.name
+              (item) => capitalize(item.name) === capitalize(newItem.name)
             );
             if (index !== -1) {
               if (
@@ -126,13 +134,15 @@ export default function Home() {
     const newNames = values.speakers
       .filter((x) => x.name)
       .map((x) => ({
-        name: x.name,
+        name: capitalize(x.name),
         date: values.date,
       }));
     const toastNames = [];
     setHistory((prevHistory) => {
       const updated = prevHistory.map((item) => {
-        const updatedSpeaker = newNames.find((x) => x.name === item.name);
+        const updatedSpeaker = newNames.find(
+          (x) => capitalize(x.name) === capitalize(item.name)
+        );
         if (updatedSpeaker) {
           if (updatedSpeaker.date <= item.date) {
             toastNames.push(updatedSpeaker.name);
@@ -143,7 +153,10 @@ export default function Home() {
         return item;
       });
       const newSpeakers = newNames.filter(
-        (x) => !prevHistory.some((item) => item.name === x.name)
+        (x) =>
+          !prevHistory.some(
+            (item) => capitalize(item.name) === capitalize(x.name)
+          )
       );
       return [...updated, ...newSpeakers];
     });
